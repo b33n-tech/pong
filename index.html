@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-<meta charset="UTF-8" />
+<meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Pong Supabase</title>
+<title>Pong</title>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
@@ -47,37 +47,14 @@ const ctx = canvas.getContext("2d");
 
 const status = document.getElementById("status");
 
-let state = null;
-
-/* ---------------- INIT STATE ---------------- */
-async function init(){
-
-  let { data } = await sb
-    .from("pong_state")
-    .select("*")
-    .eq("id",1)
-    .maybeSingle();
-
-  if(!data){
-    state = {
-      id:1,
-      ball_x:400,
-      ball_y:250,
-      vel_x:4,
-      vel_y:3,
-      paddle_left:200,
-      paddle_right:200
-    };
-
-    await sb.from("pong_state").insert(state);
-  } else {
-    state = data;
-  }
-
-  status.innerText = "Connecté 🎮";
-}
-
-init();
+let state = {
+  ball_x:400,
+  ball_y:250,
+  vel_x:4,
+  vel_y:3,
+  paddle_left:200,
+  paddle_right:200
+};
 
 /* ---------------- DRAW ---------------- */
 function draw(){
@@ -88,18 +65,12 @@ function draw(){
   // ball
   ctx.fillStyle="white";
   ctx.beginPath();
-  ctx.arc(state.ball_x, state.ball_y, 8, 0, Math.PI*2);
+  ctx.arc(state.ball_x,state.ball_y,8,0,Math.PI*2);
   ctx.fill();
 
   // paddles
-  ctx.fillRect(10, state.paddle_left, 10, 80);
-  ctx.fillRect(780, state.paddle_right, 10, 80);
-
-  // center line
-  ctx.fillStyle="#222";
-  for(let i=0;i<10;i++){
-    ctx.fillRect(398,i*50,4,20);
-  }
+  ctx.fillRect(10,state.paddle_left,10,80);
+  ctx.fillRect(780,state.paddle_right,10,80);
 }
 
 /* ---------------- PHYSICS ---------------- */
@@ -119,7 +90,6 @@ function update(){
     state.ball_y < state.paddle_left + 80
   ){
     state.vel_x *= -1;
-    state.ball_x = 25;
   }
 
   // right paddle
@@ -129,52 +99,45 @@ function update(){
     state.ball_y < state.paddle_right + 80
   ){
     state.vel_x *= -1;
-    state.ball_x = 775;
   }
 }
 
 /* ---------------- LOOP ---------------- */
-async function loop(){
+function loop(){
 
-  if(state){
-    update();
-    draw();
-
-    await sb
-      .from("pong_state")
-      .update(state)
-      .eq("id",1);
-  }
+  update();
+  draw();
 
   requestAnimationFrame(loop);
 }
 
 loop();
 
-/* ---------------- INPUT LISTENER ---------------- */
-sb.channel("inputs")
-.on(
-  "postgres_changes",
-  {
-    event:"INSERT",
-    schema:"public",
-    table:"pong_input"
-  },
-  ({new:input})=>{
+/* ---------------- INPUT (BROADCAST ONLY) ---------------- */
+const channel = sb.channel("pong");
 
-    if(input.player === "left"){
-      state.paddle_left += input.direction === "up" ? -30 : 30;
-      state.paddle_left = Math.max(0, Math.min(420, state.paddle_left));
-    }
+channel
+.on("broadcast", { event: "move" }, ({payload}) => {
 
-    if(input.player === "right"){
-      state.paddle_right += input.direction === "up" ? -30 : 30;
-      state.paddle_right = Math.max(0, Math.min(420, state.paddle_right));
-    }
+  const step = 30;
+
+  if(payload.player === "left"){
+    if(payload.dir === "up") state.paddle_left -= step;
+    if(payload.dir === "down") state.paddle_left += step;
   }
-)
+
+  if(payload.player === "right"){
+    if(payload.dir === "up") state.paddle_right -= step;
+    if(payload.dir === "down") state.paddle_right += step;
+  }
+
+  state.paddle_left = Math.max(0, Math.min(420, state.paddle_left));
+  state.paddle_right = Math.max(0, Math.min(420, state.paddle_right));
+
+})
 .subscribe();
 
+status.innerText = "Connecté 🎮";
 </script>
 
 </body>
