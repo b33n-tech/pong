@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+body{
+  margin:0;
+  display:flex;
+  flex-direction:column;
+  height:100vh;
+  justify-content:center;
+  align-items:center;
+  background:#111;
+  color:white;
+}
+button{
+  font-size:40px;
+  margin:20px;
+  padding:20px;
+}
+</style>
+</head>
+<body>
+
+<h2>Player 1</h2>
+
+<button onclick="move('up')">⬆️</button>
+<button onclick="move('down')">⬇️</button>
+
+<script>
+const supabase = window.supabase.createClient(
+"https://kqhquyeeroskszhblsvq.supabase.co",
+"sb_publishable_JMOdzvwVNDBTpHlqKy584Q_Z5SvuYmh"
+);
+
+function move(dir){
+
+  supabase.rpc("move_paddle",{
+    player:"left",
+    dir:dir
+  });
+
+}
+</script>
+
+</body>
+</html>
