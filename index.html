@@ -1,111 +1,180 @@
 <!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
-<meta charset="UTF-8"/>
-<title>Pong</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Pong Supabase</title>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <style>
-body{margin:0;background:black;overflow:hidden;}
-canvas{display:block;margin:auto;background:#000;}
+html,body{
+  margin:0;
+  background:#000;
+  overflow:hidden;
+  font-family:Arial;
+}
+canvas{
+  display:block;
+  margin:auto;
+  background:#000;
+}
+#status{
+  position:fixed;
+  top:10px;
+  left:10px;
+  color:#aaa;
+  font-size:14px;
+}
 </style>
 </head>
+
 <body>
 
+<div id="status">Connexion...</div>
 <canvas id="c"></canvas>
 
 <script>
-const SUPABASE_URL="https://kqhquyeeroskszhblsvq.supabase.co";
-const SUPABASE_KEY="sb_publishable_JMOdzvwVNDBTpHlqKy584Q_Z5SvuYmh";
-const supabase = window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+const SUPABASE_URL = "https://kqhquyeeroskszhblsvq.supabase.co";
+const SUPABASE_KEY = "sb_publishable_JMOdzvwVNDBTpHlqKy584Q_Z5SvuYmh";
 
-const canvas=document.getElementById("c");
-canvas.width=800;
-canvas.height=500;
-const ctx=canvas.getContext("2d");
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
-let state=null;
+const canvas = document.getElementById("c");
+canvas.width = 800;
+canvas.height = 500;
+const ctx = canvas.getContext("2d");
 
-async function load(){
-  const {data} = await supabase
+const statusEl = document.getElementById("status");
+
+let state = null;
+
+/* ---------- INIT STATE ---------- */
+async function initState(){
+
+  let { data } = await sb
     .from("pong_state")
     .select("*")
     .eq("id",1)
-    .single();
+    .maybeSingle();
 
-  state=data;
-}
-load();
+  if(!data){
+    const newState = {
+      id:1,
+      ball_x:400,
+      ball_y:250,
+      vel_x:4,
+      vel_y:3,
+      paddle_left:200,
+      paddle_right:200
+    };
 
-function updatePhysics(){
-
-  state.ball_x += state.vel_x;
-  state.ball_y += state.vel_y;
-
-  // rebonds haut bas
-  if(state.ball_y<0 || state.ball_y>500){
-    state.vel_y *= -1;
+    await sb.from("pong_state").insert(newState);
+    state = newState;
+  } else {
+    state = data;
   }
 
-  // collision paddle gauche
-  if(state.ball_x<20 &&
-     state.ball_y>state.paddle_left &&
-     state.ball_y<state.paddle_left+80){
-    state.vel_x *= -1;
-  }
-
-  // collision droite
-  if(state.ball_x>780 &&
-     state.ball_y>state.paddle_right &&
-     state.ball_y<state.paddle_right+80){
-    state.vel_x *= -1;
-  }
-
+  statusEl.innerText = "Connecté 🎮";
 }
 
+initState();
+
+/* ---------- DRAW ---------- */
 function draw(){
 
-  ctx.clearRect(0,0,800,500);
+  ctx.fillStyle="#000";
+  ctx.fillRect(0,0,800,500);
 
   // ball
   ctx.fillStyle="white";
   ctx.beginPath();
-  ctx.arc(state.ball_x,state.ball_y,8,0,Math.PI*2);
+  ctx.arc(state.ball_x, state.ball_y, 8, 0, Math.PI*2);
   ctx.fill();
 
   // paddles
-  ctx.fillRect(10,state.paddle_left,10,80);
-  ctx.fillRect(780,state.paddle_right,10,80);
+  ctx.fillRect(10, state.paddle_left, 10, 80);
+  ctx.fillRect(780, state.paddle_right, 10, 80);
 
+  // center line
+  ctx.fillStyle="#222";
+  for(let i=0;i<10;i++){
+    ctx.fillRect(398,i*50,4,20);
+  }
 }
 
+/* ---------- PHYSICS ---------- */
+function update(){
+
+  state.ball_x += state.vel_x;
+  state.ball_y += state.vel_y;
+
+  // top/bottom
+  if(state.ball_y < 0 || state.ball_y > 500){
+    state.vel_y *= -1;
+  }
+
+  // left paddle
+  if(
+    state.ball_x < 25 &&
+    state.ball_y > state.paddle_left &&
+    state.ball_y < state.paddle_left + 80
+  ){
+    state.vel_x *= -1;
+    state.ball_x = 25;
+  }
+
+  // right paddle
+  if(
+    state.ball_x > 775 &&
+    state.ball_y > state.paddle_right &&
+    state.ball_y < state.paddle_right + 80
+  ){
+    state.vel_x *= -1;
+    state.ball_x = 775;
+  }
+}
+
+/* ---------- LOOP ---------- */
 async function loop(){
 
-  if(state){
-
-    updatePhysics();
-    draw();
-
-    await supabase
-      .from("pong_state")
-      .update(state)
-      .eq("id",1);
+  if(!state){
+    ctx.fillStyle="white";
+    ctx.font="20px Arial";
+    ctx.fillText("Chargement Supabase...", 260, 250);
+    requestAnimationFrame(loop);
+    return;
   }
+
+  update();
+  draw();
+
+  await sb
+    .from("pong_state")
+    .update(state)
+    .eq("id",1);
 
   requestAnimationFrame(loop);
 }
 
 loop();
 
-supabase
-.channel("pong")
-.on("postgres_changes",
-  {event:"UPDATE",schema:"public",table:"pong_state"},
+/* ---------- REALTIME ---------- */
+sb.channel("pong")
+.on(
+  "postgres_changes",
+  {
+    event:"UPDATE",
+    schema:"public",
+    table:"pong_state"
+  },
   payload=>{
-    state=payload.new;
+    state = payload.new;
   }
 )
 .subscribe();
 
 </script>
+
 </body>
 </html>
