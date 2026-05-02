@@ -12,7 +12,6 @@ html,body{
   margin:0;
   background:#000;
   overflow:hidden;
-  font-family:Arial;
 }
 canvas{
   display:block;
@@ -24,6 +23,7 @@ canvas{
   top:10px;
   left:10px;
   color:#aaa;
+  font-family:Arial;
   font-size:14px;
 }
 </style>
@@ -45,12 +45,12 @@ canvas.width = 800;
 canvas.height = 500;
 const ctx = canvas.getContext("2d");
 
-const statusEl = document.getElementById("status");
+const status = document.getElementById("status");
 
 let state = null;
 
-/* ---------- INIT STATE ---------- */
-async function initState(){
+/* ---------------- INIT STATE ---------------- */
+async function init(){
 
   let { data } = await sb
     .from("pong_state")
@@ -59,7 +59,7 @@ async function initState(){
     .maybeSingle();
 
   if(!data){
-    const newState = {
+    state = {
       id:1,
       ball_x:400,
       ball_y:250,
@@ -69,18 +69,17 @@ async function initState(){
       paddle_right:200
     };
 
-    await sb.from("pong_state").insert(newState);
-    state = newState;
+    await sb.from("pong_state").insert(state);
   } else {
     state = data;
   }
 
-  statusEl.innerText = "Connecté 🎮";
+  status.innerText = "Connecté 🎮";
 }
 
-initState();
+init();
 
-/* ---------- DRAW ---------- */
+/* ---------------- DRAW ---------------- */
 function draw(){
 
   ctx.fillStyle="#000";
@@ -103,13 +102,12 @@ function draw(){
   }
 }
 
-/* ---------- PHYSICS ---------- */
+/* ---------------- PHYSICS ---------------- */
 function update(){
 
   state.ball_x += state.vel_x;
   state.ball_y += state.vel_y;
 
-  // top/bottom
   if(state.ball_y < 0 || state.ball_y > 500){
     state.vel_y *= -1;
   }
@@ -135,41 +133,44 @@ function update(){
   }
 }
 
-/* ---------- LOOP ---------- */
+/* ---------------- LOOP ---------------- */
 async function loop(){
 
-  if(!state){
-    ctx.fillStyle="white";
-    ctx.font="20px Arial";
-    ctx.fillText("Chargement Supabase...", 260, 250);
-    requestAnimationFrame(loop);
-    return;
+  if(state){
+    update();
+    draw();
+
+    await sb
+      .from("pong_state")
+      .update(state)
+      .eq("id",1);
   }
-
-  update();
-  draw();
-
-  await sb
-    .from("pong_state")
-    .update(state)
-    .eq("id",1);
 
   requestAnimationFrame(loop);
 }
 
 loop();
 
-/* ---------- REALTIME ---------- */
-sb.channel("pong")
+/* ---------------- INPUT LISTENER ---------------- */
+sb.channel("inputs")
 .on(
   "postgres_changes",
   {
-    event:"UPDATE",
+    event:"INSERT",
     schema:"public",
-    table:"pong_state"
+    table:"pong_input"
   },
-  payload=>{
-    state = payload.new;
+  ({new:input})=>{
+
+    if(input.player === "left"){
+      state.paddle_left += input.direction === "up" ? -30 : 30;
+      state.paddle_left = Math.max(0, Math.min(420, state.paddle_left));
+    }
+
+    if(input.player === "right"){
+      state.paddle_right += input.direction === "up" ? -30 : 30;
+      state.paddle_right = Math.max(0, Math.min(420, state.paddle_right));
+    }
   }
 )
 .subscribe();
