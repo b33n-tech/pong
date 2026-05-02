@@ -37,10 +37,17 @@ const sb = supabase.createClient(
 "sb_publishable_JMOdzvwVNDBTpHlqKy584Q_Z5SvuYmh"
 );
 
+const channel = sb.channel("pong");
+channel.subscribe();
+
 function send(dir){
-  sb.from("pong_input").insert({
-    player:"right",
-    direction:dir
+  channel.send({
+    type:"broadcast",
+    event:"move",
+    payload:{
+      player:"right",
+      dir
+    }
   });
 }
 </script>
