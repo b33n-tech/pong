@@ -1,17 +1,20 @@
 <!DOCTYPE html>
 <html>
 <head>
+<meta charset="UTF-8"/>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
 <style>
 body{
   margin:0;
+  height:100vh;
   display:flex;
   flex-direction:column;
-  height:100vh;
   justify-content:center;
   align-items:center;
   background:#111;
   color:white;
+  font-family:Arial;
 }
 button{
   font-size:40px;
@@ -20,26 +23,25 @@ button{
 }
 </style>
 </head>
+
 <body>
 
 <h2>Player 2</h2>
 
-<button onclick="move('up')">⬆️</button>
-<button onclick="move('down')">⬇️</button>
+<button onclick="send('up')">⬆️</button>
+<button onclick="send('down')">⬇️</button>
 
 <script>
-const supabase = window.supabase.createClient(
+const sb = supabase.createClient(
 "https://kqhquyeeroskszhblsvq.supabase.co",
 "sb_publishable_JMOdzvwVNDBTpHlqKy584Q_Z5SvuYmh"
 );
 
-function move(dir){
-
-  supabase.rpc("move_paddle",{
+function send(dir){
+  sb.from("pong_input").insert({
     player:"right",
-    dir:dir
+    direction:dir
   });
-
 }
 </script>
 
